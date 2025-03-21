@@ -136,12 +136,15 @@ def main(args):
         callbacks=[checkpoint_callback, lr_monitor, early_stopping],
         logger=logger,
         log_every_n_steps=50,
-        check_val_every_n_epoch=args.val_check_interval,
-        resume_from_checkpoint=args.resume_from_checkpoint if args.resume_from_checkpoint else None
+        check_val_every_n_epoch=args.val_check_interval
     )
     
     # Train model
-    trainer.fit(model, data_module)
+    if args.resume_from_checkpoint != None:
+        print(f"Resuming training from checkpoint {args.resume_from_checkpoint}")
+        trainer.fit(model, data_module, ckpt_path=args.resume_from_checkpoint)
+    else:
+        trainer.fit(model, data_module)
     
     # Print best model path
     print(f"Best model path: {checkpoint_callback.best_model_path}")
