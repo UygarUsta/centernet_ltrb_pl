@@ -71,9 +71,9 @@ DataRoot/
 
 This project is inspired by the original CenterNet paper and aims to provide a clean and modular implementation with additional features for better performance.
 
-https://github.com/xingyizhou/CenterNet
-https://github.com/610265158/mobile_centernet
-https://github.com/bubbliiiing/centernet-pytorch
+- https://github.com/xingyizhou/CenterNet
+- https://github.com/610265158/mobile_centernet
+- https://github.com/bubbliiiing/centernet-pytorch
 ---
 
 ## License
