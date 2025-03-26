@@ -250,13 +250,16 @@ class LightningCenterNet(pl.LightningModule):
                     print(f"Warning: Could not read image {image_path}")
                     continue
                     
-                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                if len(np.shape(image)) == 3 and np.shape(image)[2] == 3:
+                    image = image # or pass
+                else:
+                    image = image.convert('RGB')
                 
                 # Preprocess image
                 image_shape = np.array(image.shape[:2])
-                image_data = cv2.resize(image, self.input_shape, interpolation=cv2.INTER_LINEAR)
+                image_data = cv2.resize(image, self.input_shape, interpolation=cv2.INTER_CUBIC)
                 image_data = image_data.astype('float32') / 255.0
-                image_data = (image_data - np.array([0.485, 0.456, 0.406])) / np.array([0.229, 0.224, 0.225])
+                image_data = (image_data - np.array([0.40789655, 0.44719303, 0.47026116])) / np.array([0.2886383, 0.27408165, 0.27809834])
                 image_data = np.transpose(image_data, (2, 0, 1))[None]
                 
                 # Run inference
