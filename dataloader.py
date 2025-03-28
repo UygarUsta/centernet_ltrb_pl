@@ -84,11 +84,11 @@ class CenternetDataset(Dataset):
 
     def __getitem__(self, index):
 
-        self.mixup_prob = 0.3 
+        self.mixup_prob = 0.25
         self.mixup_alpha = np.random.uniform(0.3, 0.5)
         
         # Load initial image and boxes
-        if self.train and np.random.rand() < 0.5:
+        if self.train and np.random.rand() < 0.25:
             image, box = self.get_mosaic_data(index)
         else:
             image, box = self.get_random_data(self.image_path[index], self.input_shape, random=self.train)
@@ -131,6 +131,11 @@ class CenternetDataset(Dataset):
                 ct_int_x = int(round(cx))
                 ct_int_y = int(round(cy))
 
+                h, w = y2 - y1, x2 - x1
+                radius = gaussian_radius((math.ceil(h), math.ceil(w)))
+                radius = max(0, int(radius))
+                batch_hm[:, :, cls_id] = draw_gaussian(batch_hm[:, :, cls_id], (ct_int_x,ct_int_y), radius)
+
                 # 3x3 neighborhood processing
                 for dx in [-1, 0, 1]:
                     for dy in [-1, 0, 1]:
@@ -142,13 +147,13 @@ class CenternetDataset(Dataset):
                             cell_center_y = (ny + 0.5) * self.stride
 
                             if (x1_img <= cell_center_x <= x2_img and y1_img <= cell_center_y <= y2_img):
-                                area = (1 / self.bbox_areas_log_np(box[i][:4])) * 2
+                                area = (1 / self.bbox_areas_log_np(boxes[i][:4])) * 2
                                 l = (cell_center_x - x1_img) / self.stride
                                 t = (cell_center_y - y1_img) / self.stride
                                 r = (x2_img - cell_center_x) / self.stride
                                 b = (y2_img - cell_center_y) / self.stride
 
-                                batch_hm[ny, nx, cls_id] = 1.0
+                                #batch_hm[ny, nx, cls_id] = 1.0
                                 batch_reg[ny, nx] = [l, t, r, b]
                                 batch_reg_mask[ny, nx] = area
 
