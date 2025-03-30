@@ -116,49 +116,54 @@ class CenternetDataset(Dataset):
         batch_reg = np.zeros((*self.output_shape, 4), dtype=np.float32)
         batch_reg_mask = np.zeros(self.output_shape, dtype=np.float32)
 
+        neighbor_size = 1
+        box_ = box.copy()
         if len(box) != 0:
-            boxes = box.copy().astype(np.float32)
-            boxes[:, :4] /= self.stride  # Normalize coordinates by stride
-            
-            for i in range(len(boxes)):
-                x1_img, y1_img, x2_img, y2_img, cls_id = box[i]
-                x1, y1, x2, y2 = boxes[i, :4]
-                cls_id = int(cls_id)
-                
-                # Calculate center in feature map space
-                cx = (x1 + x2) / 2
-                cy = (y1 + y2) / 2
-                ct_int_x = int(round(cx))
-                ct_int_y = int(round(cy))
-
-                h, w = y2 - y1, x2 - x1
+            boxes = np.array(box[:, :4],dtype=np.float32)
+            boxes[:, [0, 2]] = np.clip(boxes[:, [0, 2]] / self.input_shape[1] * self.output_shape[1], 0, self.output_shape[1] - 1)
+            boxes[:, [1, 3]] = np.clip(boxes[:, [1, 3]] / self.input_shape[0] * self.output_shape[0], 0, self.output_shape[0] - 1)
+        H, W = batch_hm.shape[:2]
+        for i in range(len(box)):
+            bbox    = boxes[i].copy()
+            cls_id  = int(box[i, -1])
+            bbox_ = box_[i].copy()
+            x1,y1,x2,y2 = bbox_[:4]
+            h, w = bbox[3] - bbox[1], bbox[2] - bbox[0]
+            if h > 0 and w > 0:
                 radius = gaussian_radius((math.ceil(h), math.ceil(w)))
                 radius = max(0, int(radius))
-                batch_hm[:, :, cls_id] = draw_gaussian(batch_hm[:, :, cls_id], (ct_int_x,ct_int_y), radius)
+                #-------------------------------------------------#
+                #   计算真实框所属的特征点
+                #-------------------------------------------------#
+                ct = np.array([(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2], dtype=np.float32)
+                ct_int = ct.astype(np.int32)
+                xmin,ymin,xmax,ymax = bbox[:4]
+                area = (1 / self.bbox_areas_log_np(bbox[:4])) * 2
+                #----------------------------#
+                #   绘制高斯热力图
+                #----------------------------#
+                batch_hm[:, :, cls_id] = draw_gaussian(batch_hm[:, :, cls_id], ct_int, radius)
+                for dx in range(-neighbor_size, neighbor_size + 1):
+                    for dy in range(-neighbor_size, neighbor_size + 1):
+                        nx = ct_int[0] + dx
+                        ny = ct_int[1] + dy
+        
+                        if nx < 0 or nx >= W or ny < 0 or ny >= H:
+                            continue
 
-                # 3x3 neighborhood processing
-                for dx in [-1, 0, 1]:
-                    for dy in [-1, 0, 1]:
-                        nx = ct_int_x + dx
-                        ny = ct_int_y + dy
 
-                        if 0 <= nx < self.output_shape[1] and 0 <= ny < self.output_shape[0]:
-                            cell_center_x = (nx + 0.5) * self.stride
-                            cell_center_y = (ny + 0.5) * self.stride
+                        adjusted_tlbr = [
+                            (nx - xmin),  # Distance from the grid cell to the left edge
+                            (ny - ymin),  # Distance from the grid cell to the top edge
+                            (xmax - nx),  # Distance from the grid cell to the right edge
+                            (ymax - ny)   # Distance from the grid cell to the bottom edge
+                        ]
+                        batch_reg[ny, nx] = adjusted_tlbr
+                        batch_hm[ny, nx, cls_id] = 1
+                        batch_reg_mask[ny, nx] = area
 
-                            if (x1_img <= cell_center_x <= x2_img and y1_img <= cell_center_y <= y2_img):
-                                area = (1 / self.bbox_areas_log_np(boxes[i][:4])) * 2
-                                l = (cell_center_x - x1_img) / self.stride
-                                t = (cell_center_y - y1_img) / self.stride
-                                r = (x2_img - cell_center_x) / self.stride
-                                b = (y2_img - cell_center_y) / self.stride
-
-                                #batch_hm[ny, nx, cls_id] = 1.0
-                                batch_reg[ny, nx] = [l, t, r, b]
-                                batch_reg_mask[ny, nx] = area
-
-        # Preprocess and return
         image = np.transpose(preprocess_input(image), (2, 0, 1))
+
         return image, batch_hm, batch_reg, batch_reg_mask
             
         
